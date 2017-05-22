@@ -34,7 +34,7 @@ void convertBayerToRGBANDG(const cv::Mat & bayer_img, cv::Mat & rgb, cv::Mat & g
 
 }
 
-void convertRGB2yuv44(cv::Mat & bgr, cv::Mat & yuv444)
+void convertRGB2yuv44(const cv::Mat & bgr, cv::Mat & yuv444)
 {
     yuv444 = cv::Mat(bgr.rows, bgr.cols, CV_8UC3);
     for (int j = 0; j < bgr.rows; ++j)
@@ -58,8 +58,8 @@ int main()
 
     cv::VideoCapture cap(converted);
     cap.set(CV_CAP_PROP_CONVERT_RGB, 0);
-    int wi = cap.get(CV_CAP_PROP_FRAME_WIDTH);
-    int he = cap.get(CV_CAP_PROP_FRAME_HEIGHT);
+    int wi = int(cap.get(CV_CAP_PROP_FRAME_WIDTH));
+    int he = int(cap.get(CV_CAP_PROP_FRAME_HEIGHT));
 
     ifstream f_left(fp, ifstream::binary);
   
@@ -129,7 +129,7 @@ int main()
     encoder.encodeConfig.fps = 25;
     encoder.encodeConfig.inputFormat = NV_ENC_BUFFER_FORMAT_YUV444; //yuv444
     encoder.init(w / 2, h / 2, 
-    { "d:/myrgb.h264", "d:/myrgb2.h264" }, "", 2);
+    { "d:/myrgb.h264", "d:/myrgb2.h264" }, "");
     //encoder.
     CNvEncoder encoder2;
     encoder2.encodeConfig.encoderPreset = "lossless";
@@ -137,7 +137,7 @@ int main()
     encoder2.encodeConfig.fps = 25;
     encoder2.encodeConfig.inputFormat = NV_ENC_BUFFER_FORMAT_NV12; //yuv444
     encoder2.init(w / 2, h / 2, 
-    { "d:/mygreen.h264", "d:/mygreen2.h264" }, "", 2);
+    { "d:/mygreen.h264", "d:/mygreen2.h264" }, "");
 
     //CNvEncoder encoder3;
     //encoder3.encodeConfig.encoderPreset = "lossless";
@@ -162,7 +162,9 @@ int main()
         g_yuv420 = cv::Mat::zeros(540, 640, CV_8UC1);
         memcpy(g_yuv420.data, ggg.data, ggg.rows * ggg.cols);
         vector<cv::Mat> splitted;
+        vector<cv::Mat> splitted2;
         cv::split(rgb, splitted);
+        cv::split(yuv420, splitted2);
         //out_yuv.write((const char *)splitted[0].data, yuv420.rows * yuv420.cols);
         //out_yuv.write((const char *)splitted[1].data, yuv420.rows * yuv420.cols);
         //out_yuv.write((const char *)splitted[2].data, yuv420.rows * yuv420.cols);
@@ -170,7 +172,7 @@ int main()
         encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 0, fc);
         encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
             g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 0, fc);
-        encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 1, fc);
+        encoder.encodeFrame(splitted2[0].data, splitted2[1].data, splitted2[2].data, 1, fc);
         encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
             g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 1, fc);
         //encoder3.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,

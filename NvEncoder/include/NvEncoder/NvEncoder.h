@@ -123,9 +123,8 @@ public:
     CNvEncoder();
     virtual ~CNvEncoder();
 
-    int EncodeMain(int argc, char *argv[]);
     void init(int w, int h, const std::vector<std::string> & output_files,
-        const std::string & externalHintInputFile, int num_of_cams);
+        const std::string & externalHintInputFile);
 
     bool encodeFrame(uint8_t *y, uint8_t *u, uint8_t *v, int cam_idx, int frame_idx);
     EncodeConfig encodeConfig;

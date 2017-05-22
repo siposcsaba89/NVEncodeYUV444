@@ -69,9 +69,9 @@ void convertyuv442RGB(cv::Mat & yuv444, cv::Mat &  bgr)
 
 int main()
 {
-    const string fp = "e:/tmp/data/raw/stream00Rec-bas.21959995-2017-04-13_16-56-51.bin";
+    const string fp = "f:/tmp/20170413/stream00Rec-bas.21959995-2017-04-13_16-56-51.bin";
 
-    const string converted = "d:/myrgb.h264";
+    const string converted = "d:/myrgb2.h264";
 
     cv::VideoCapture cap(converted);
     cap.set(CV_CAP_PROP_CONVERT_RGB, 0);
@@ -140,7 +140,7 @@ int main()
 
 
 
-    cv::Mat test = cv::imread("d:/first.png");
+    //cv::Mat test = cv::imread("d:/first.png");
     while (!f_left.eof())
 
     {
@@ -182,13 +182,14 @@ int main()
         vector<cv::Mat> splitted;
         cv::split(rgb, splitted);
         vector<cv::Mat> splitted_decoded;
-        cv::split(test, splitted_decoded);
+        cv::split(decoded, splitted_decoded);
         splitted[0].convertTo(splitted[0], CV_32F);
         splitted[1].convertTo(splitted[1], CV_32F);
         splitted[2].convertTo(splitted[2], CV_32F);
         splitted_decoded[2].convertTo(splitted_decoded[2], CV_32F);
         splitted_decoded[1].convertTo(splitted_decoded[1], CV_32F);
         splitted_decoded[0].convertTo(splitted_decoded[0], CV_32F);
+        cout << "Compression error sum in intensity: ";
         cout << cv::norm(splitted[0] - splitted_decoded[0]) << " ";
         cout << cv::norm(splitted[1] - splitted_decoded[1]) << " ";
         cout << cv::norm(splitted[2] - splitted_decoded[2]) << endl;
@@ -203,6 +204,7 @@ int main()
         splitted_bc[2].convertTo(splitted_bc[2], CV_32F);
         splitted_bc[1].convertTo(splitted_bc[1], CV_32F);
         splitted_bc[0].convertTo(splitted_bc[0], CV_32F);
+        cout << "RGB->YUV, YUV->RGB error sum in intensity: ";
         cout << cv::norm(splitted[0] - splitted_bc[0]) << " ";
         cout << cv::norm(splitted[1] - splitted_bc[1]) << " ";
         cout << cv::norm(splitted[2] - splitted_bc[2]) << endl;

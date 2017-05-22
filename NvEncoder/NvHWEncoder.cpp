@@ -916,7 +916,6 @@ NVENCSTATUS CNvHWEncoder::CreateEncoder(EncodeConfig *pEncCfg)
 
     stCapsParam.capsToQuery = NV_ENC_CAPS_ASYNC_ENCODE_SUPPORT;
     m_pEncodeAPI->nvEncGetEncodeCaps(m_hEncoder, m_stCreateEncodeParams.encodeGUID, &stCapsParam, &asyncMode);
-    asyncMode = 0;
     m_stCreateEncodeParams.enableEncodeAsync = asyncMode;
 
     pEncCfg->enableAsyncMode = asyncMode;
@@ -1214,7 +1213,7 @@ NVENCSTATUS CNvHWEncoder::NvEncEncodeFrame(EncodeBuffer *pEncodeBuffer, NvEncPic
     encPicParams.inputHeight = height;
     encPicParams.outputBitstream = pEncodeBuffer->stOutputBfr.hBitstreamBuffer;
     encPicParams.completionEvent = pEncodeBuffer->stOutputBfr.hOutputEvent;
-    encPicParams.inputTimeStamp = 0;// m_EncodeIdx;
+    encPicParams.inputTimeStamp = m_EncodeIdx;
     encPicParams.pictureStruct = ePicStruct;
     encPicParams.qpDeltaMap = qpDeltaMapArray;
     encPicParams.qpDeltaMapSize = qpDeltaMapArraySize;
@@ -1258,7 +1257,7 @@ NVENCSTATUS CNvHWEncoder::NvEncEncodeFrame(EncodeBuffer *pEncodeBuffer, NvEncPic
     {
         if (encPicCommand->bForceIDR)
         {
-            encPicParams.encodePicFlags |= NV_ENC_PIC_FLAG_FORCEIDR;
+            encPicParams.encodePicFlags |= NV_ENC_PIC_FLAG_OUTPUT_SPSPPS | NV_ENC_PIC_FLAG_FORCEIDR;
         }
 
         if (encPicCommand->bForceIntraRefresh)
