@@ -916,6 +916,7 @@ NVENCSTATUS CNvHWEncoder::CreateEncoder(EncodeConfig *pEncCfg)
 
     stCapsParam.capsToQuery = NV_ENC_CAPS_ASYNC_ENCODE_SUPPORT;
     m_pEncodeAPI->nvEncGetEncodeCaps(m_hEncoder, m_stCreateEncodeParams.encodeGUID, &stCapsParam, &asyncMode);
+    asyncMode = 0;
     m_stCreateEncodeParams.enableEncodeAsync = asyncMode;
 
     pEncCfg->enableAsyncMode = asyncMode;
@@ -1213,7 +1214,7 @@ NVENCSTATUS CNvHWEncoder::NvEncEncodeFrame(EncodeBuffer *pEncodeBuffer, NvEncPic
     encPicParams.inputHeight = height;
     encPicParams.outputBitstream = pEncodeBuffer->stOutputBfr.hBitstreamBuffer;
     encPicParams.completionEvent = pEncodeBuffer->stOutputBfr.hOutputEvent;
-    encPicParams.inputTimeStamp = m_EncodeIdx;
+    encPicParams.inputTimeStamp = 0;// m_EncodeIdx;
     encPicParams.pictureStruct = ePicStruct;
     encPicParams.qpDeltaMap = qpDeltaMapArray;
     encPicParams.qpDeltaMapSize = qpDeltaMapArraySize;
@@ -1312,7 +1313,7 @@ NVENCSTATUS CNvHWEncoder::ParseArguments(EncodeConfig *encodeConfig, int argc, c
                 PRINTERR("invalid parameter for %s\n", argv[i - 1]);
                 return NV_ENC_ERR_INVALID_PARAM;
             }
-            encodeConfig->inputFilePath = argv[i];
+            //encodeConfig->inputFilePath = argv[i];
         }
         else if (stricmp(argv[i], "-i") == 0)
         {

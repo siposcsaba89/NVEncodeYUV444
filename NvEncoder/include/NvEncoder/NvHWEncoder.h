@@ -72,7 +72,7 @@ typedef struct _EncodeConfig
     //char* outputFileName;
     //char* externalHintInputFile;
     char* encoderPreset;
-    char* inputFilePath;
+    //char* inputFilePath;
     char* encCmdFileName;
     int   enableMEOnly;
     int   enableAsyncMode;

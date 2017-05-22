@@ -550,43 +550,51 @@ NVENCSTATUS CNvEncoder::AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputH
     return NV_ENC_SUCCESS;
 }
 
-NVENCSTATUS CNvEncoder::AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat)
+NVENCSTATUS CNvEncoder::AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat,
+    int num_of_cams)
 {
     NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
 
-    m_MVBufferQueue.Initialize(m_stMVBuffer, m_uEncodeBufferCount);
-    for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
+    m_stMVBuffer.resize(num_cameras);
+    m_MVBufferQueue.resize(num_cameras);
+    for (size_t j = 0; j < m_stMVBuffer.size(); ++j)
     {
-        // Allocate Input, Reference surface
-        for (uint32_t j = 0; j < 2; j++)
+        m_stMVBuffer[j].resize(MAX_ENCODE_QUEUE);
+        m_MVBufferQueue[j].Initialize(m_stMVBuffer[j].data(), m_uEncodeBufferCount);
+
+        for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
         {
-            nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, &m_stMVBuffer[i].stInputBfr[j].hInputSurface, inputFormat);
+            // Allocate Input, Reference surface
+            for (uint32_t j = 0; j < 2; j++)
+            {
+                nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, &m_stMVBuffer[j][i].stInputBfr[j].hInputSurface, inputFormat);
+                if (nvStatus != NV_ENC_SUCCESS)
+                    return nvStatus;
+                m_stMVBuffer[j][i].stInputBfr[j].bufferFmt = inputFormat;
+                m_stMVBuffer[j][i].stInputBfr[j].dwWidth = uInputWidth;
+                m_stMVBuffer[j][i].stInputBfr[j].dwHeight = uInputHeight;
+            }
+            //Allocate output surface
+            uint32_t encodeWidthInMbs = (uInputWidth + 15) >> 4;
+            uint32_t encodeHeightInMbs = (uInputHeight + 15) >> 4;
+            uint32_t dwSize = encodeWidthInMbs * encodeHeightInMbs * 64;
+            nvStatus = m_pNvHWEncoder->NvEncCreateMVBuffer(dwSize, &m_stMVBuffer[j][i].stOutputBfr.hBitstreamBuffer);
             if (nvStatus != NV_ENC_SUCCESS)
+            {
+                PRINTERR("nvEncCreateMVBuffer error:0x%x\n", nvStatus);
                 return nvStatus;
-            m_stMVBuffer[i].stInputBfr[j].bufferFmt = inputFormat;
-            m_stMVBuffer[i].stInputBfr[j].dwWidth = uInputWidth;
-            m_stMVBuffer[i].stInputBfr[j].dwHeight = uInputHeight;
+            }
+            m_stMVBuffer[j][i].stOutputBfr.dwBitstreamBufferSize = dwSize;
+            if (m_stEncoderInput.enableAsyncMode)
+            {
+                nvStatus = m_pNvHWEncoder->NvEncRegisterAsyncEvent(&m_stMVBuffer[j][i].stOutputBfr.hOutputEvent);
+                if (nvStatus != NV_ENC_SUCCESS)
+                    return nvStatus;
+                m_stMVBuffer[j][i].stOutputBfr.bWaitOnEvent = true;
+            }
+            else
+                m_stMVBuffer[j][i].stOutputBfr.hOutputEvent = NULL;
         }
-        //Allocate output surface
-        uint32_t encodeWidthInMbs = (uInputWidth + 15) >> 4;
-        uint32_t encodeHeightInMbs = (uInputHeight + 15) >> 4;
-        uint32_t dwSize = encodeWidthInMbs * encodeHeightInMbs * 64;
-        nvStatus = m_pNvHWEncoder->NvEncCreateMVBuffer(dwSize, &m_stMVBuffer[i].stOutputBfr.hBitstreamBuffer);
-        if (nvStatus != NV_ENC_SUCCESS)
-        {
-            PRINTERR("nvEncCreateMVBuffer error:0x%x\n", nvStatus);
-            return nvStatus;
-        }
-        m_stMVBuffer[i].stOutputBfr.dwBitstreamBufferSize = dwSize;
-        if (m_stEncoderInput.enableAsyncMode)
-        {
-            nvStatus = m_pNvHWEncoder->NvEncRegisterAsyncEvent(&m_stMVBuffer[i].stOutputBfr.hOutputEvent);
-            if (nvStatus != NV_ENC_SUCCESS)
-                return nvStatus;
-            m_stMVBuffer[i].stOutputBfr.bWaitOnEvent = true;
-        }
-        else
-            m_stMVBuffer[i].stOutputBfr.hOutputEvent = NULL;
     }
     return NV_ENC_SUCCESS;
 }
@@ -624,20 +632,23 @@ NVENCSTATUS CNvEncoder::ReleaseIOBuffers()
 
 NVENCSTATUS CNvEncoder::ReleaseMVIOBuffers()
 {
-    for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
+    for (size_t k = 0; k < m_stMVBuffer.size(); ++k)
     {
-        for (uint32_t j = 0; j < 2; j++)
+        for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
         {
-            m_pNvHWEncoder->NvEncDestroyInputBuffer(m_stMVBuffer[i].stInputBfr[j].hInputSurface);
-            m_stMVBuffer[i].stInputBfr[j].hInputSurface = NULL;
-        }
-        m_pNvHWEncoder->NvEncDestroyMVBuffer(m_stMVBuffer[i].stOutputBfr.hBitstreamBuffer);
-        m_stMVBuffer[i].stOutputBfr.hBitstreamBuffer = NULL;
-        if (m_stEncoderInput.enableAsyncMode)
-        {
-            m_pNvHWEncoder->NvEncUnregisterAsyncEvent(m_stMVBuffer[i].stOutputBfr.hOutputEvent);
-            nvCloseFile(m_stMVBuffer[i].stOutputBfr.hOutputEvent);
-            m_stMVBuffer[i].stOutputBfr.hOutputEvent = NULL;
+            for (uint32_t j = 0; j < 2; j++)
+            {
+                m_pNvHWEncoder->NvEncDestroyInputBuffer(m_stMVBuffer[k][i].stInputBfr[j].hInputSurface);
+                m_stMVBuffer[k][i].stInputBfr[j].hInputSurface = NULL;
+            }
+            m_pNvHWEncoder->NvEncDestroyMVBuffer(m_stMVBuffer[k][i].stOutputBfr.hBitstreamBuffer);
+            m_stMVBuffer[k][i].stOutputBfr.hBitstreamBuffer = NULL;
+            if (m_stEncoderInput.enableAsyncMode)
+            {
+                m_pNvHWEncoder->NvEncUnregisterAsyncEvent(m_stMVBuffer[k][i].stOutputBfr.hOutputEvent);
+                nvCloseFile(m_stMVBuffer[k][i].stOutputBfr.hOutputEvent);
+                m_stMVBuffer[k][i].stOutputBfr.hOutputEvent = NULL;
+            }
         }
     }
 
@@ -646,12 +657,12 @@ NVENCSTATUS CNvEncoder::ReleaseMVIOBuffers()
 
 void CNvEncoder::FlushMVOutputBuffer(int cam_idx)
 {
-    MotionEstimationBuffer *pMEBufer = m_MVBufferQueue.GetPending();
+    MotionEstimationBuffer *pMEBufer = m_MVBufferQueue[cam_idx].GetPending();
 
     while (pMEBufer)
     {
             m_pNvHWEncoder->ProcessMVOutput(pMEBufer, encodeConfig.fOutput[cam_idx]);
-            pMEBufer = m_MVBufferQueue.GetPending();
+            pMEBufer = m_MVBufferQueue[cam_idx].GetPending();
     }
 }
 
@@ -1501,7 +1512,7 @@ void CNvEncoder::init(int w, int h,
     {
         // Struct MotionEstimationBuffer has capacity to store two inputBuffer in single object.
         m_uEncodeBufferCount = m_uEncodeBufferCount / 2;
-        nvStatus = AllocateMVIOBuffers(encodeConfig.width, encodeConfig.height, encodeConfig.inputFormat);
+        nvStatus = AllocateMVIOBuffers(encodeConfig.width, encodeConfig.height, encodeConfig.inputFormat, num_cameras);
     }
     else
     {
@@ -1736,11 +1747,11 @@ NVENCSTATUS CNvEncoder::RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlu
         return NV_ENC_ERR_INVALID_PARAM;
     }
 
-    pMEBuffer = m_MVBufferQueue.GetAvailable();
+    pMEBuffer = m_MVBufferQueue[cam_idx].GetAvailable();
     if(!pMEBuffer)
     {
-        m_pNvHWEncoder->ProcessMVOutput(m_MVBufferQueue.GetPending(), encodeConfig.fOutput[cam_idx]);
-        pMEBuffer = m_MVBufferQueue.GetAvailable();
+        m_pNvHWEncoder->ProcessMVOutput(m_MVBufferQueue[cam_idx].GetPending(), encodeConfig.fOutput[cam_idx]);
+        pMEBuffer = m_MVBufferQueue[cam_idx].GetAvailable();
     }
     pMEBuffer->inputFrameIndex = pMEOnly->inputFrameIndex;
     pMEBuffer->referenceFrameIndex = pMEOnly->referenceFrameIndex;

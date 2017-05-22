@@ -52,7 +52,7 @@ void convertRGB2yuv44(cv::Mat & bgr, cv::Mat & yuv444)
 
 int main()
 {
-    const string fp = "e:/tmp/data/raw/stream00Rec-bas.21959995-2017-04-13_16-56-51.bin";
+    const string fp = "f:/tmp/20170413/stream00Rec-bas.21959995-2017-04-13_16-56-51.bin";
 
     const string converted = "d:/outRGB444.h264";
 
@@ -118,8 +118,8 @@ int main()
         f_left.seekg(pos);
     }
     cv::Mat left_raw(h, w, CV_8UC1), rgb, ggg;
-    ofstream out_yuv("test.yuv", ios::binary);
-    ofstream out_g_yuv("testG.yuv", ios::binary);
+    //ofstream out_yuv("test.yuv", ios::binary);
+    //ofstream out_g_yuv("testG.yuv", ios::binary);
     int fc = 0;
 
     
@@ -168,9 +168,9 @@ int main()
         //out_yuv.write((const char *)splitted[2].data, yuv420.rows * yuv420.cols);
         clock_t t = clock();
         encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 0, fc);
-        encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 1, fc);
-        encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols, 
+        encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
             g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 0, fc);
+        encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 1, fc);
         encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
             g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 1, fc);
         //encoder3.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,

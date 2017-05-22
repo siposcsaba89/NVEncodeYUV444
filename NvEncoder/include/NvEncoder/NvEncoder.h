@@ -144,7 +144,7 @@ protected:
     std::vector<std::vector<EncodeBuffer>> m_stEncodeBuffer;// [MAX_ENCODE_QUEUE];
     std::vector<std::vector<MotionEstimationBuffer>> m_stMVBuffer;// [MAX_ENCODE_QUEUE];
     std::vector<CNvQueue<EncodeBuffer>> m_EncodeBufferQueue;
-    CNvQueue<MotionEstimationBuffer> m_MVBufferQueue;
+    std::vector<CNvQueue<MotionEstimationBuffer>> m_MVBufferQueue;
     std::vector<EncodeOutputBuffer> m_stEOSOutputBfr; 
 
 protected:
@@ -155,7 +155,7 @@ protected:
     //NVENCSTATUS InitD3D10(uint32_t deviceID = 0);
     NVENCSTATUS InitCuda(uint32_t deviceID = 0);
     NVENCSTATUS AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cams);
-    NVENCSTATUS AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat);
+    NVENCSTATUS AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cams);
     NVENCSTATUS ReleaseIOBuffers();
     NVENCSTATUS ReleaseMVIOBuffers();
     unsigned char* LockInputBuffer(void * hInputSurface, uint32_t *pLockedPitch);
