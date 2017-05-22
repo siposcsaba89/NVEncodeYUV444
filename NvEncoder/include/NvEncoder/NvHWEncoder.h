@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-
+#include <vector>
 #include <cuda.h> // <cuda.h>
 
 #include "NvEncoder/nvEncodeAPI.h"
@@ -52,7 +52,7 @@ typedef struct _EncodeConfig
     float            i_quant_offset;
     float            b_quant_offset;
     GUID             presetGUID;
-    FILE            *fOutput;
+    std::vector<FILE*> fOutput;
     int              codec;
     int              invalidateRefFramesEnableFlag;
     int              intraRefreshEnableFlag;
@@ -161,7 +161,7 @@ class CNvHWEncoder
 {
 public:
     uint32_t                                             m_EncodeIdx;
-    FILE                                                *m_fOutput;
+    //FILE                                                *m_fOutput;
     uint32_t                                             m_uMaxWidth;
     uint32_t                                             m_uMaxHeight;
     uint32_t                                             m_uCurWidth;
@@ -228,8 +228,8 @@ public:
                                                                           NVENC_EXTERNAL_ME_HINT_COUNTS_PER_BLOCKTYPE *meHintCountsPerBlock = NULL);
     NVENCSTATUS                                          CreateEncoder(EncodeConfig *pEncCfg);
     GUID                                                 GetPresetGUID(char* encoderPreset, int codec);
-    NVENCSTATUS                                          ProcessOutput(const EncodeBuffer *pEncodeBuffer);
-    NVENCSTATUS                                          ProcessMVOutput(const MotionEstimationBuffer *pEncodeBuffer);
+    NVENCSTATUS                                          ProcessOutput(const EncodeBuffer *pEncodeBuffer, FILE * out_file);
+    NVENCSTATUS                                          ProcessMVOutput(const MotionEstimationBuffer *pEncodeBuffer, FILE * out_file);
     NVENCSTATUS                                          FlushEncoder();
     NVENCSTATUS                                          ValidateEncodeGUID(GUID inputCodecGuid);
     NVENCSTATUS                                          ValidatePresetGUID(GUID presetCodecGuid, GUID inputCodecGuid);

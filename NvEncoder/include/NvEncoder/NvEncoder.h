@@ -10,6 +10,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 #include <string>
+#include <vector>
 
 #if defined(NV_WINDOWS)
     #include <d3d9.h>
@@ -123,10 +124,10 @@ public:
     virtual ~CNvEncoder();
 
     int EncodeMain(int argc, char *argv[]);
-    void init(int w, int h, const std::string & output_file,
-        const std::string & externalHintInputFile);
+    void init(int w, int h, const std::vector<std::string> & output_files,
+        const std::string & externalHintInputFile, int num_of_cams);
 
-    bool encodeFrame(uint8_t *y, uint8_t *u, uint8_t *v, int frame_idx);
+    bool encodeFrame(uint8_t *y, uint8_t *u, uint8_t *v, int cam_idx, int frame_idx);
     EncodeConfig encodeConfig;
 
 protected:
@@ -140,33 +141,35 @@ protected:
 
     CUcontext m_cuContext;
     EncodeConfig m_stEncoderInput;
-    EncodeBuffer m_stEncodeBuffer[MAX_ENCODE_QUEUE];
-    MotionEstimationBuffer m_stMVBuffer[MAX_ENCODE_QUEUE];
-    CNvQueue<EncodeBuffer> m_EncodeBufferQueue;
+    std::vector<std::vector<EncodeBuffer>> m_stEncodeBuffer;// [MAX_ENCODE_QUEUE];
+    std::vector<std::vector<MotionEstimationBuffer>> m_stMVBuffer;// [MAX_ENCODE_QUEUE];
+    std::vector<CNvQueue<EncodeBuffer>> m_EncodeBufferQueue;
     CNvQueue<MotionEstimationBuffer> m_MVBufferQueue;
-    EncodeOutputBuffer m_stEOSOutputBfr; 
+    std::vector<EncodeOutputBuffer> m_stEOSOutputBfr; 
 
 protected:
     NVENCSTATUS                                          Deinitialize(uint32_t devicetype);
-    NVENCSTATUS EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush=false, uint32_t width=0, uint32_t height=0);
+    NVENCSTATUS EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush=false, uint32_t width=0, uint32_t height=0, int cam_idx = 0);
     //NVENCSTATUS InitD3D9(uint32_t deviceID = 0);
     //NVENCSTATUS InitD3D11(uint32_t deviceID = 0);
     //NVENCSTATUS InitD3D10(uint32_t deviceID = 0);
     NVENCSTATUS InitCuda(uint32_t deviceID = 0);
-    NVENCSTATUS AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat);
+    NVENCSTATUS AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cams);
     NVENCSTATUS AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat);
     NVENCSTATUS ReleaseIOBuffers();
     NVENCSTATUS ReleaseMVIOBuffers();
     unsigned char* LockInputBuffer(void * hInputSurface, uint32_t *pLockedPitch);
-    NVENCSTATUS FlushEncoder();
-    void FlushMVOutputBuffer();
-    NVENCSTATUS RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlush);
+    NVENCSTATUS FlushEncoder(int cam_idx);
+    void FlushMVOutputBuffer(int cam_idx);
+    NVENCSTATUS RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlush, int cam_idx);
 
     uint32_t  chromaFormatIDC = 0;
     int8_t *qpDeltaMapArray = NULL;
     uint32_t qpDeltaMapArraySize = 0;
     FILE *fpExternalHint = NULL;
     NVENC_EXTERNAL_ME_HINT *ceaBuffer = NULL;
+    bool doNotReleaseContext = false;
+    int num_cameras = 1;
 };
 
 // NVEncodeAPI entry point

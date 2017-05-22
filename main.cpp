@@ -4,7 +4,7 @@
 #include <NvEncoder/NvEncoder.h>
 
 #include <fstream>
-
+#include <ctime>
 
 using namespace std;
 
@@ -123,22 +123,28 @@ int main()
     int fc = 0;
 
     
-    
     CNvEncoder encoder;
     encoder.encodeConfig.encoderPreset = "lossless";
     encoder.encodeConfig.codec = 0;
     encoder.encodeConfig.fps = 25;
     encoder.encodeConfig.inputFormat = NV_ENC_BUFFER_FORMAT_YUV444; //yuv444
-    encoder.init(w/2, h/2, "d:/myrgb.h264", "");
+    encoder.init(w / 2, h / 2, 
+    { "d:/myrgb.h264", "d:/myrgb2.h264" }, "", 2);
     //encoder.
     CNvEncoder encoder2;
     encoder2.encodeConfig.encoderPreset = "lossless";
     encoder2.encodeConfig.codec = 0;
     encoder2.encodeConfig.fps = 25;
     encoder2.encodeConfig.inputFormat = NV_ENC_BUFFER_FORMAT_NV12; //yuv444
-    encoder2.init(w / 2, h / 2, "d:/mygreen.h264", "");
+    encoder2.init(w / 2, h / 2, 
+    { "d:/mygreen.h264", "d:/mygreen2.h264" }, "", 2);
 
-
+    //CNvEncoder encoder3;
+    //encoder3.encodeConfig.encoderPreset = "lossless";
+    //encoder3.encodeConfig.codec = 0;
+    //encoder3.encodeConfig.fps = 25;
+    //encoder3.encodeConfig.inputFormat = NV_ENC_BUFFER_FORMAT_NV12; //yuv444
+    //encoder3.init(w / 2, h / 2, "d:/mygreen2.h264", "");
     while (!f_left.eof())
 
     {
@@ -156,14 +162,20 @@ int main()
         g_yuv420 = cv::Mat::zeros(540, 640, CV_8UC1);
         memcpy(g_yuv420.data, ggg.data, ggg.rows * ggg.cols);
         vector<cv::Mat> splitted;
-        cv::split(yuv420, splitted);
+        cv::split(rgb, splitted);
         //out_yuv.write((const char *)splitted[0].data, yuv420.rows * yuv420.cols);
         //out_yuv.write((const char *)splitted[1].data, yuv420.rows * yuv420.cols);
         //out_yuv.write((const char *)splitted[2].data, yuv420.rows * yuv420.cols);
-        encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, fc);
+        clock_t t = clock();
+        encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 0, fc);
+        encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 1, fc);
         encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols, 
-            g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, fc);
-
+            g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 0, fc);
+        encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
+            g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 1, fc);
+        //encoder3.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
+        //    g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, fc);
+        cout << "Time: " << clock() - t << "\n";
         //cv::cvtColor(yuv420, rgb_back, CV_YCrCb2BGR);
         //out_g_yuv.write((const char *)g_yuv420.data, g_yuv420.rows * g_yuv420.cols);
 

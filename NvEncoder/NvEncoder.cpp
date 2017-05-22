@@ -135,16 +135,22 @@ CNvEncoder::CNvEncoder()
 
 CNvEncoder::~CNvEncoder()
 {
-    auto nvStatus = EncodeFrame(NULL, true, encodeConfig.width, encodeConfig.height);
+    for (int i = 0; i < int(encodeConfig.fOutput.size()); ++i)
+    {
+        auto nvStatus = EncodeFrame(NULL, true, encodeConfig.width, encodeConfig.height, i);
+    }
 
     if (ceaBuffer)
     {
         free(ceaBuffer);
         ceaBuffer = NULL;
     }
-    if (encodeConfig.fOutput)
+    for (int i = 0; i < num_cameras; ++i)
     {
-        fclose(encodeConfig.fOutput);
+        if (encodeConfig.fOutput[i])
+        {
+            fclose(encodeConfig.fOutput[i]);
+        }
     }
     if (fpExternalHint)
     {
@@ -267,7 +273,7 @@ NVENCSTATUS MeonlyOutPutToCEABufferPacker(FILE *fpExternalHint, uint32_t width, 
 }
 
 
-bool CNvEncoder::encodeFrame(uint8_t *y, uint8_t *u, uint8_t *v, int frame_idx)
+bool CNvEncoder::encodeFrame(uint8_t *y, uint8_t *u, uint8_t *v, int cam_idx, int frame_idx)
 {
     EncodeFrameConfig stEncodeFrame;
     memset(&stEncodeFrame, 0, sizeof(stEncodeFrame));
@@ -295,7 +301,7 @@ bool CNvEncoder::encodeFrame(uint8_t *y, uint8_t *u, uint8_t *v, int frame_idx)
             stEncodeFrame.meExternalHints = ceaBuffer;
         }
     }
-    EncodeFrame(&stEncodeFrame, false, encodeConfig.width, encodeConfig.height);
+    EncodeFrame(&stEncodeFrame, false, encodeConfig.width, encodeConfig.height, cam_idx);
 
     return false;
 }
@@ -304,7 +310,7 @@ NVENCSTATUS CNvEncoder::InitCuda(uint32_t deviceID)
 {
     CUresult cuResult;
     CUdevice device;
-    CUcontext cuContextCurr;
+//    CUcontext cuContextCurr;
     int  deviceCount = 0;
     int  SMminor = 0, SMmajor = 0;
 
@@ -362,6 +368,8 @@ NVENCSTATUS CNvEncoder::InitCuda(uint32_t deviceID)
     cuResult = cuCtxGetCurrent((CUcontext*)&m_pDevice);
     if (m_pDevice == NULL)
         cuResult = cuCtxCreate((CUcontext*)(&m_pDevice), 0, device);
+    else
+        doNotReleaseContext = true;
     if (cuResult != CUDA_SUCCESS)
     {
         PRINTERR("cuCtxCreate error:0x%x\n", cuResult);
@@ -369,13 +377,13 @@ NVENCSTATUS CNvEncoder::InitCuda(uint32_t deviceID)
         return NV_ENC_ERR_NO_ENCODE_DEVICE;
     }
 
-    cuResult = cuCtxPopCurrent(&cuContextCurr);
-    if (cuResult != CUDA_SUCCESS)
-    {
-        PRINTERR("cuCtxPopCurrent error:0x%x\n", cuResult);
-        assert(0);
-        return NV_ENC_ERR_NO_ENCODE_DEVICE;
-    }
+    //cuResult = cuCtxPopCurrent(&cuContextCurr);
+    //if (cuResult != CUDA_SUCCESS)
+    //{
+    //    PRINTERR("cuCtxPopCurrent error:0x%x\n", cuResult);
+    //    assert(0);
+    //    return NV_ENC_ERR_NO_ENCODE_DEVICE;
+    //}
     return NV_ENC_SUCCESS;
 }
 
@@ -492,46 +500,53 @@ NVENCSTATUS CNvEncoder::InitCuda(uint32_t deviceID)
 //}
 //#endif
 
-NVENCSTATUS CNvEncoder::AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat)
+NVENCSTATUS CNvEncoder::AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cam)
 {
     NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
-
-    m_EncodeBufferQueue.Initialize(m_stEncodeBuffer, m_uEncodeBufferCount);
-    for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
+    m_EncodeBufferQueue.resize(num_of_cam);
+    m_stEncodeBuffer.resize(num_cameras);
+    m_stEOSOutputBfr.resize(num_cameras);
+    for (size_t j = 0; j < m_EncodeBufferQueue.size(); ++j)
     {
-        nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, &m_stEncodeBuffer[i].stInputBfr.hInputSurface, inputFormat);
-        if (nvStatus != NV_ENC_SUCCESS)
-            return nvStatus;
+        m_stEncodeBuffer[j].resize(MAX_ENCODE_QUEUE);
+        m_EncodeBufferQueue[j].Initialize(m_stEncodeBuffer[j].data(), m_uEncodeBufferCount);
 
-        m_stEncodeBuffer[i].stInputBfr.bufferFmt = inputFormat;
-        m_stEncodeBuffer[i].stInputBfr.dwWidth = uInputWidth;
-        m_stEncodeBuffer[i].stInputBfr.dwHeight = uInputHeight;
-        nvStatus = m_pNvHWEncoder->NvEncCreateBitstreamBuffer(BITSTREAM_BUFFER_SIZE, &m_stEncodeBuffer[i].stOutputBfr.hBitstreamBuffer);
-        if (nvStatus != NV_ENC_SUCCESS)
-            return nvStatus;
-         m_stEncodeBuffer[i].stOutputBfr.dwBitstreamBufferSize = BITSTREAM_BUFFER_SIZE;
-        if (m_stEncoderInput.enableAsyncMode)
+
+        for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
         {
-            nvStatus = m_pNvHWEncoder->NvEncRegisterAsyncEvent(&m_stEncodeBuffer[i].stOutputBfr.hOutputEvent);
+            nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, &m_stEncodeBuffer[j][i].stInputBfr.hInputSurface, inputFormat);
             if (nvStatus != NV_ENC_SUCCESS)
                 return nvStatus;
-            m_stEncodeBuffer[i].stOutputBfr.bWaitOnEvent = true;
+
+            m_stEncodeBuffer[j][i].stInputBfr.bufferFmt = inputFormat;
+            m_stEncodeBuffer[j][i].stInputBfr.dwWidth = uInputWidth;
+            m_stEncodeBuffer[j][i].stInputBfr.dwHeight = uInputHeight;
+            nvStatus = m_pNvHWEncoder->NvEncCreateBitstreamBuffer(BITSTREAM_BUFFER_SIZE, &m_stEncodeBuffer[j][i].stOutputBfr.hBitstreamBuffer);
+            if (nvStatus != NV_ENC_SUCCESS)
+                return nvStatus;
+            m_stEncodeBuffer[j][i].stOutputBfr.dwBitstreamBufferSize = BITSTREAM_BUFFER_SIZE;
+            if (m_stEncoderInput.enableAsyncMode)
+            {
+                nvStatus = m_pNvHWEncoder->NvEncRegisterAsyncEvent(&m_stEncodeBuffer[j][i].stOutputBfr.hOutputEvent);
+                if (nvStatus != NV_ENC_SUCCESS)
+                    return nvStatus;
+                m_stEncodeBuffer[j][i].stOutputBfr.bWaitOnEvent = true;
+            }
+            else
+                m_stEncodeBuffer[j][i].stOutputBfr.hOutputEvent = NULL;
+        }
+
+        m_stEOSOutputBfr[j].bEOSFlag = TRUE;
+
+        if (m_stEncoderInput.enableAsyncMode)
+        {
+            nvStatus = m_pNvHWEncoder->NvEncRegisterAsyncEvent(&m_stEOSOutputBfr[j].hOutputEvent);
+            if (nvStatus != NV_ENC_SUCCESS)
+                return nvStatus;
         }
         else
-            m_stEncodeBuffer[i].stOutputBfr.hOutputEvent = NULL;
+            m_stEOSOutputBfr[j].hOutputEvent = NULL;
     }
-
-    m_stEOSOutputBfr.bEOSFlag = TRUE;
-
-    if (m_stEncoderInput.enableAsyncMode)
-    {
-        nvStatus = m_pNvHWEncoder->NvEncRegisterAsyncEvent(&m_stEOSOutputBfr.hOutputEvent);
-        if (nvStatus != NV_ENC_SUCCESS)
-            return nvStatus;
-    }
-    else
-        m_stEOSOutputBfr.hOutputEvent = NULL;
-
     return NV_ENC_SUCCESS;
 }
 
@@ -578,30 +593,32 @@ NVENCSTATUS CNvEncoder::AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInpu
 
 NVENCSTATUS CNvEncoder::ReleaseIOBuffers()
 {
-    for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
+    for (int j = 0; j < int(m_stEncodeBuffer.size()); ++j)
     {
-        m_pNvHWEncoder->NvEncDestroyInputBuffer(m_stEncodeBuffer[i].stInputBfr.hInputSurface);
-        m_stEncodeBuffer[i].stInputBfr.hInputSurface = NULL;
-        m_pNvHWEncoder->NvEncDestroyBitstreamBuffer(m_stEncodeBuffer[i].stOutputBfr.hBitstreamBuffer);
-        m_stEncodeBuffer[i].stOutputBfr.hBitstreamBuffer = NULL;
-        if (m_stEncoderInput.enableAsyncMode)
+        for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
         {
-            m_pNvHWEncoder->NvEncUnregisterAsyncEvent(m_stEncodeBuffer[i].stOutputBfr.hOutputEvent);
-            nvCloseFile(m_stEncodeBuffer[i].stOutputBfr.hOutputEvent);
-            m_stEncodeBuffer[i].stOutputBfr.hOutputEvent = NULL;
+            m_pNvHWEncoder->NvEncDestroyInputBuffer(m_stEncodeBuffer[j][i].stInputBfr.hInputSurface);
+            m_stEncodeBuffer[j][i].stInputBfr.hInputSurface = NULL;
+            m_pNvHWEncoder->NvEncDestroyBitstreamBuffer(m_stEncodeBuffer[j][i].stOutputBfr.hBitstreamBuffer);
+            m_stEncodeBuffer[j][i].stOutputBfr.hBitstreamBuffer = NULL;
+            if (m_stEncoderInput.enableAsyncMode)
+            {
+                m_pNvHWEncoder->NvEncUnregisterAsyncEvent(m_stEncodeBuffer[j][i].stOutputBfr.hOutputEvent);
+                nvCloseFile(m_stEncodeBuffer[j][i].stOutputBfr.hOutputEvent);
+                m_stEncodeBuffer[j][i].stOutputBfr.hOutputEvent = NULL;
+            }
+        }
+
+        if (m_stEOSOutputBfr[j].hOutputEvent)
+        {
+            if (m_stEncoderInput.enableAsyncMode)
+            {
+                m_pNvHWEncoder->NvEncUnregisterAsyncEvent(m_stEOSOutputBfr[j].hOutputEvent);
+                nvCloseFile(m_stEOSOutputBfr[j].hOutputEvent);
+                m_stEOSOutputBfr[j].hOutputEvent = NULL;
+            }
         }
     }
-
-    if (m_stEOSOutputBfr.hOutputEvent)
-    {
-        if (m_stEncoderInput.enableAsyncMode)
-        {
-            m_pNvHWEncoder->NvEncUnregisterAsyncEvent(m_stEOSOutputBfr.hOutputEvent);
-            nvCloseFile(m_stEOSOutputBfr.hOutputEvent);
-            m_stEOSOutputBfr.hOutputEvent = NULL;
-        }
-    }
-
     return NV_ENC_SUCCESS;
 }
 
@@ -627,38 +644,38 @@ NVENCSTATUS CNvEncoder::ReleaseMVIOBuffers()
     return NV_ENC_SUCCESS;
 }
 
-void CNvEncoder::FlushMVOutputBuffer()
+void CNvEncoder::FlushMVOutputBuffer(int cam_idx)
 {
     MotionEstimationBuffer *pMEBufer = m_MVBufferQueue.GetPending();
 
     while (pMEBufer)
     {
-            m_pNvHWEncoder->ProcessMVOutput(pMEBufer);
+            m_pNvHWEncoder->ProcessMVOutput(pMEBufer, encodeConfig.fOutput[cam_idx]);
             pMEBufer = m_MVBufferQueue.GetPending();
     }
 }
 
-NVENCSTATUS CNvEncoder::FlushEncoder()
+NVENCSTATUS CNvEncoder::FlushEncoder(int cam_idx)
 {
-    NVENCSTATUS nvStatus = m_pNvHWEncoder->NvEncFlushEncoderQueue(m_stEOSOutputBfr.hOutputEvent);
+    NVENCSTATUS nvStatus = m_pNvHWEncoder->NvEncFlushEncoderQueue(m_stEOSOutputBfr[cam_idx].hOutputEvent);
     if (nvStatus != NV_ENC_SUCCESS)
     {
         assert(0);
         return nvStatus;
     }
 
-    EncodeBuffer *pEncodeBufer = m_EncodeBufferQueue.GetPending();
+    EncodeBuffer *pEncodeBufer = m_EncodeBufferQueue[cam_idx].GetPending();
     while (pEncodeBufer)
     {
-        m_pNvHWEncoder->ProcessOutput(pEncodeBufer);
-        pEncodeBufer = m_EncodeBufferQueue.GetPending();
+        m_pNvHWEncoder->ProcessOutput(pEncodeBufer, encodeConfig.fOutput[cam_idx]);
+        pEncodeBufer = m_EncodeBufferQueue[cam_idx].GetPending();
     }
 
 #if defined(NV_WINDOWS)
     if (m_stEncoderInput.enableAsyncMode)
     {
     
-        if (WaitForSingleObject(m_stEOSOutputBfr.hOutputEvent, 500) != WAIT_OBJECT_0)
+        if (WaitForSingleObject(m_stEOSOutputBfr[cam_idx].hOutputEvent, 500) != WAIT_OBJECT_0)
         {
             assert(0);
             nvStatus = NV_ENC_ERR_GENERIC;
@@ -703,10 +720,13 @@ NVENCSTATUS CNvEncoder::Deinitialize(uint32_t devicetype)
 #endif
 
         case NV_ENC_CUDA:
-            CUresult cuResult = CUDA_SUCCESS;
-            cuResult = cuCtxDestroy((CUcontext)m_pDevice);
-            if (cuResult != CUDA_SUCCESS)
-                PRINTERR("cuCtxDestroy error:0x%x\n", cuResult);
+            if (!doNotReleaseContext)
+            {
+                CUresult cuResult = CUDA_SUCCESS;
+                cuResult = cuCtxDestroy((CUcontext)m_pDevice);
+                if (cuResult != CUDA_SUCCESS)
+                    PRINTERR("cuCtxDestroy error:0x%x\n", cuResult);
+            }
         }
 
         m_pDevice = NULL;
@@ -1298,9 +1318,11 @@ return 0;
 }
 
 void CNvEncoder::init(int w, int h,
-    const std::string & output_file,
-    const std::string & externalHintInputFile)
+    const std::vector<std::string> & output_files,
+    const std::string & externalHintInputFile,
+    int num_of_cams)
 {
+    num_cameras = num_of_cams;
     //HANDLE hInput;
     //DWORD fileSize;
     //uint32_t numBytesRead = 0;
@@ -1332,14 +1354,18 @@ void CNvEncoder::init(int w, int h,
     //    PrintHelp();
     //    //return 1;
     //}
-
-    encodeConfig.fOutput = fopen(output_file.c_str(), "wb");
-    if (encodeConfig.fOutput == NULL)
+    for (int i = 0; i < num_of_cams; ++i)
     {
-        PRINTERR("Failed to create \"%s\"\n", output_file.c_str());
-        //return 1;
-    }
+        FILE * tmp = fopen(output_files[i].c_str(), "wb");
+        if (tmp == NULL)
+        {
+            PRINTERR("Failed to create \"%s\"\n", output_files[i].c_str());
+            exit(-1);
+        }
 
+        encodeConfig.fOutput.push_back(tmp);
+    }
+   
     //hInput = nvOpenFile(encodeConfig.inputFileName);
     //if (hInput == INVALID_HANDLE_VALUE)
     //{
@@ -1396,7 +1422,8 @@ void CNvEncoder::init(int w, int h,
     encodeConfig.presetGUID = m_pNvHWEncoder->GetPresetGUID(encodeConfig.encoderPreset, encodeConfig.codec);
 
     //printf("Encoding input           : \"%s\"\n", encodeConfig.inputFileName);
-    printf("         output          : \"%s\"\n", output_file.c_str());
+    for (auto & s: output_files)
+        printf("         output          : \"%s\"\n", s.c_str());
     printf("         codec           : \"%s\"\n", encodeConfig.codec == NV_ENC_HEVC ? "HEVC" : "H264");
     printf("         size            : %dx%d\n", encodeConfig.width, encodeConfig.height);
     printf("         bitrate         : %d bits/sec\n", encodeConfig.bitrate);
@@ -1478,7 +1505,7 @@ void CNvEncoder::init(int w, int h,
     }
     else
     {
-        nvStatus = AllocateIOBuffers(encodeConfig.width, encodeConfig.height, encodeConfig.inputFormat);
+        nvStatus = AllocateIOBuffers(encodeConfig.width, encodeConfig.height, encodeConfig.inputFormat, num_of_cams);
     }
     if (nvStatus != NV_ENC_SUCCESS)
         exit(-1);
@@ -1685,7 +1712,7 @@ void CNvEncoder::init(int w, int h,
 
 }
 
-NVENCSTATUS CNvEncoder::RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlush)
+NVENCSTATUS CNvEncoder::RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlush, int cam_idx)
 {
     uint8_t *pInputSurface = NULL;
     uint8_t *pInputSurfaceCh = NULL;
@@ -1699,7 +1726,7 @@ NVENCSTATUS CNvEncoder::RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlu
 
     if (bFlush)
     {
-        FlushMVOutputBuffer();
+        FlushMVOutputBuffer(cam_idx);
         return NV_ENC_SUCCESS;
     }
 
@@ -1712,7 +1739,7 @@ NVENCSTATUS CNvEncoder::RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlu
     pMEBuffer = m_MVBufferQueue.GetAvailable();
     if(!pMEBuffer)
     {
-        m_pNvHWEncoder->ProcessMVOutput(m_MVBufferQueue.GetPending());
+        m_pNvHWEncoder->ProcessMVOutput(m_MVBufferQueue.GetPending(), encodeConfig.fOutput[cam_idx]);
         pMEBuffer = m_MVBufferQueue.GetAvailable();
     }
     pMEBuffer->inputFrameIndex = pMEOnly->inputFrameIndex;
@@ -1765,7 +1792,7 @@ NVENCSTATUS CNvEncoder::RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlu
 
 }
 
-NVENCSTATUS CNvEncoder::EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush, uint32_t width, uint32_t height)
+NVENCSTATUS CNvEncoder::EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush, uint32_t width, uint32_t height, int cam_idx)
 {
     NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
     uint32_t lockedPitch = 0;
@@ -1773,7 +1800,7 @@ NVENCSTATUS CNvEncoder::EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush
 
     if (bFlush)
     {
-        FlushEncoder();
+        FlushEncoder(cam_idx);
         return NV_ENC_SUCCESS;
     }
 
@@ -1782,11 +1809,11 @@ NVENCSTATUS CNvEncoder::EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush
         return NV_ENC_ERR_INVALID_PARAM;
     }
 
-    pEncodeBuffer = m_EncodeBufferQueue.GetAvailable();
+    pEncodeBuffer = m_EncodeBufferQueue[cam_idx].GetAvailable();
     if(!pEncodeBuffer)
     {
-        m_pNvHWEncoder->ProcessOutput(m_EncodeBufferQueue.GetPending());
-        pEncodeBuffer = m_EncodeBufferQueue.GetAvailable();
+        m_pNvHWEncoder->ProcessOutput(m_EncodeBufferQueue[cam_idx].GetPending(), encodeConfig.fOutput[cam_idx]);
+        pEncodeBuffer = m_EncodeBufferQueue[cam_idx].GetAvailable();
     }
 
     unsigned char *pInputSurface;

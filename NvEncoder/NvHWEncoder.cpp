@@ -585,7 +585,7 @@ CNvHWEncoder::CNvHWEncoder()
     m_bEncoderInitialized = false;
     m_pEncodeAPI = NULL;
     m_hinstLib = NULL;
-    m_fOutput = NULL;
+    //m_fOutput = NULL;
     m_EncodeIdx = 0;
     m_uCurWidth = 0;
     m_uCurHeight = 0;
@@ -729,9 +729,9 @@ NVENCSTATUS CNvHWEncoder::CreateEncoder(EncodeConfig *pEncCfg)
         return NV_ENC_ERR_INVALID_PARAM;
     }
 
-    m_fOutput = pEncCfg->fOutput;
+    //m_fOutput = pEncCfg->fOutput;
 
-    if (!pEncCfg->width || !pEncCfg->height || !m_fOutput)
+    if (!pEncCfg->width || !pEncCfg->height)
     {
         return NV_ENC_ERR_INVALID_PARAM;
     }
@@ -1027,7 +1027,7 @@ GUID CNvHWEncoder::GetPresetGUID(char* encoderPreset, int codec)
     return presetGUID;
 }
 
-NVENCSTATUS CNvHWEncoder::ProcessOutput(const EncodeBuffer *pEncodeBuffer)
+NVENCSTATUS CNvHWEncoder::ProcessOutput(const EncodeBuffer *pEncodeBuffer, FILE * out_file)
 {
     NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
 
@@ -1060,7 +1060,7 @@ NVENCSTATUS CNvHWEncoder::ProcessOutput(const EncodeBuffer *pEncodeBuffer)
     nvStatus = m_pEncodeAPI->nvEncLockBitstream(m_hEncoder, &lockBitstreamData);
     if (nvStatus == NV_ENC_SUCCESS)
     {
-        fwrite(lockBitstreamData.bitstreamBufferPtr, 1, lockBitstreamData.bitstreamSizeInBytes, m_fOutput);
+        fwrite(lockBitstreamData.bitstreamBufferPtr, 1, lockBitstreamData.bitstreamSizeInBytes, out_file);
         nvStatus = m_pEncodeAPI->nvEncUnlockBitstream(m_hEncoder, pEncodeBuffer->stOutputBfr.hBitstreamBuffer);
     }
     else
@@ -1071,7 +1071,7 @@ NVENCSTATUS CNvHWEncoder::ProcessOutput(const EncodeBuffer *pEncodeBuffer)
     return nvStatus;
 }
 
-NVENCSTATUS CNvHWEncoder::ProcessMVOutput(const MotionEstimationBuffer *pMEBuffer)
+NVENCSTATUS CNvHWEncoder::ProcessMVOutput(const MotionEstimationBuffer *pMEBuffer, FILE * out_file)
 {
     NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
 
@@ -1107,25 +1107,25 @@ NVENCSTATUS CNvHWEncoder::ProcessMVOutput(const MotionEstimationBuffer *pMEBuffe
         if (codecGUID == NV_ENC_CODEC_H264_GUID)
         {
             unsigned int numMBs = ((m_uMaxWidth + 15) >> 4) * ((m_uMaxHeight + 15) >> 4);
-            fprintf(m_fOutput, "Motion Vectors for input frame = %d, reference frame = %d\n", pMEBuffer->inputFrameIndex, pMEBuffer->referenceFrameIndex);
-            fprintf(m_fOutput, "block, mb_type, partitionType, "
+            fprintf(out_file, "Motion Vectors for input frame = %d, reference frame = %d\n", pMEBuffer->inputFrameIndex, pMEBuffer->referenceFrameIndex);
+            fprintf(out_file, "block, mb_type, partitionType, "
                 "MV[0].x, MV[0].y, MV[1].x, MV[1].y, MV[2].x, MV[2].y, MV[3].x, MV[3].y, cost\n");
             NV_ENC_H264_MV_DATA *outputMV = (NV_ENC_H264_MV_DATA *)lockBitstreamData.bitstreamBufferPtr;
             for (unsigned int i = 0; i < numMBs; i++)
             {
-                fprintf(m_fOutput, "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", \
+                fprintf(out_file, "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", \
                     i, outputMV[i].mbType, outputMV[i].partitionType, \
                     outputMV[i].mv[0].mvx, outputMV[i].mv[0].mvy, outputMV[i].mv[1].mvx, outputMV[i].mv[1].mvy, \
                     outputMV[i].mv[2].mvx, outputMV[i].mv[2].mvy, outputMV[i].mv[3].mvx, outputMV[i].mv[3].mvy, outputMV[i].mbCost);
             }
-            fprintf(m_fOutput, "\n");
+            fprintf(out_file, "\n");
         }
         else
         {
             unsigned int numCTBs = ((m_uMaxWidth + 31) >> 5) * ((m_uMaxHeight + 31) >> 5);
-            fprintf(m_fOutput, "Motion Vectors for input frame = %d, reference frame = %d\n", pMEBuffer->inputFrameIndex, pMEBuffer->referenceFrameIndex);
+            fprintf(out_file, "Motion Vectors for input frame = %d, reference frame = %d\n", pMEBuffer->inputFrameIndex, pMEBuffer->referenceFrameIndex);
             NV_ENC_HEVC_MV_DATA *outputMV = (NV_ENC_HEVC_MV_DATA *)lockBitstreamData.bitstreamBufferPtr;
-            fprintf(m_fOutput, "ctb, cuType, cuSize, partitionMode, "
+            fprintf(out_file, "ctb, cuType, cuSize, partitionMode, "
                 "MV[0].x, MV[0].y, MV[1].x, MV[1].y, MV[2].x, MV[2].y, MV[3].x, MV[3].y\n");
             bool lastCUInCTB = false;
             for (unsigned int i = 0; i < numCTBs; i++)
@@ -1133,14 +1133,14 @@ NVENCSTATUS CNvHWEncoder::ProcessMVOutput(const MotionEstimationBuffer *pMEBuffe
                 do
                 {
                     lastCUInCTB = outputMV->lastCUInCTB ? true : false;
-                    fprintf(m_fOutput, "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", \
+                    fprintf(out_file, "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", \
                         i, outputMV->cuType, outputMV->cuSize, outputMV->partitionMode, \
                         outputMV->mv[0].mvx, outputMV->mv[0].mvy, outputMV->mv[1].mvx, outputMV->mv[1].mvy, \
                         outputMV->mv[2].mvx, outputMV->mv[2].mvy, outputMV->mv[3].mvx, outputMV->mv[3].mvy);
                     outputMV += 1;
                 } while (!lastCUInCTB);
             }
-            fprintf(m_fOutput, "\n");
+            fprintf(out_file, "\n");
         }
         nvStatus = m_pEncodeAPI->nvEncUnlockBitstream(m_hEncoder, pMEBuffer->stOutputBfr.hBitstreamBuffer);
     }

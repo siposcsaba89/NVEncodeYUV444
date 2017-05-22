@@ -140,7 +140,7 @@ int main()
 
 
 
-
+    cv::Mat test = cv::imread("d:/first.png");
     while (!f_left.eof())
 
     {
@@ -182,7 +182,7 @@ int main()
         vector<cv::Mat> splitted;
         cv::split(rgb, splitted);
         vector<cv::Mat> splitted_decoded;
-        cv::split(decoded, splitted_decoded);
+        cv::split(test, splitted_decoded);
         splitted[0].convertTo(splitted[0], CV_32F);
         splitted[1].convertTo(splitted[1], CV_32F);
         splitted[2].convertTo(splitted[2], CV_32F);
