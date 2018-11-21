@@ -164,7 +164,7 @@ NVENCSTATUS CNvHWEncoder::NvEncCreateInputBuffer(uint32_t width, uint32_t height
 
     createInputBufferParams.width = width;
     createInputBufferParams.height = height;
-    createInputBufferParams.memoryHeap = NV_ENC_MEMORY_HEAP_SYSMEM_CACHED;
+    createInputBufferParams.memoryHeap = NV_ENC_MEMORY_HEAP_VID;
     createInputBufferParams.bufferFmt = inputFormat;
 
     nvStatus = m_pEncodeAPI->nvEncCreateInputBuffer(m_hEncoder, &createInputBufferParams);
@@ -1207,7 +1207,12 @@ NVENCSTATUS CNvHWEncoder::NvEncEncodeFrame(EncodeBuffer *pEncodeBuffer, NvEncPic
     SET_VER(encPicParams, NV_ENC_PIC_PARAMS);
 
 
-    encPicParams.inputBuffer = pEncodeBuffer->stInputBfr.hInputSurface;
+    NV_ENC_MAP_INPUT_RESOURCE mapInputResource = { NV_ENC_MAP_INPUT_RESOURCE_VER };
+    mapInputResource.registeredResource = pEncodeBuffer->stInputBfr.hInputSurface;
+    m_pEncodeAPI->nvEncMapInputResource(m_hEncoder, &mapInputResource);
+
+    pEncodeBuffer->stInputBfr.nvRegisteredResource = mapInputResource.mappedResource;
+    encPicParams.inputBuffer = mapInputResource.mappedResource;
     encPicParams.bufferFmt = pEncodeBuffer->stInputBfr.bufferFmt;
     encPicParams.inputWidth = width;
     encPicParams.inputHeight = height;

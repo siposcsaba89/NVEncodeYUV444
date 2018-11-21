@@ -16,6 +16,7 @@
 #include "NvEncoder/NvEncoder.h"
 #include "NvEncoder/nvFileIO.h"
 #include <new>
+#include <cuda.h>
 
 #define BITSTREAM_BUFFER_SIZE 2 * 1024 * 1024
 
@@ -500,7 +501,9 @@ NVENCSTATUS CNvEncoder::InitCuda(uint32_t deviceID)
 //}
 //#endif
 
-NVENCSTATUS CNvEncoder::AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cam)
+NVENCSTATUS CNvEncoder::AllocateIOBuffers(uint32_t uInputWidth, 
+    uint32_t uInputHeight,
+    NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cam)
 {
     NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
     m_EncodeBufferQueue.resize(num_of_cam);
@@ -514,7 +517,41 @@ NVENCSTATUS CNvEncoder::AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputH
 
         for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
         {
-            nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, &m_stEncodeBuffer[j][i].stInputBfr.hInputSurface, inputFormat);
+
+            //cuCtxPushCurrent(m_cuContext);
+            //{
+                uint32_t chromaHeight = uInputHeight / 2;
+                size_t pPitch = 0;
+                cuMemAllocPitch((CUdeviceptr *)&m_stEncodeBuffer[j][i].stInputBfr.pNV12devPtr,
+                    &pPitch,
+                    uInputWidth,
+                    uInputHeight + chromaHeight, 16);
+                //cuMemAlloc((CUdeviceptr *)&m_stEncodeBuffer[j][i].stInputBfr.pNV12devPtr,
+                    //uInputWidth *
+                    //uInputHeight + uInputWidth * uInputHeight / 2);
+                //}
+            //cuCtxPopCurrent(NULL);
+
+
+            NV_ENC_REGISTER_RESOURCE registerResource = { NV_ENC_REGISTER_RESOURCE_VER };
+            registerResource.resourceType = NV_ENC_INPUT_RESOURCE_TYPE_CUDADEVICEPTR;
+            registerResource.resourceToRegister = (void *)m_stEncodeBuffer[j][i].stInputBfr.pNV12devPtr;
+            registerResource.width = uInputWidth;
+            registerResource.height = uInputHeight;
+            registerResource.pitch = uInputWidth;
+            registerResource.bufferFormat = inputFormat;
+            m_pNvHWEncoder->NvEncRegisterResource(registerResource.resourceType,
+                (void *)m_stEncodeBuffer[j][i].stInputBfr.pNV12devPtr, uInputWidth,
+                uInputHeight, uInputWidth, (void **)&m_stEncodeBuffer[j][i].stInputBfr.hInputSurface,
+                inputFormat); 
+            //m_nvenc.nvEncRegisterResource(m_hEncoder, &registerResource));
+
+            
+            
+            //nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, (void**)&m_stEncodeBuffer[j][i].stInputBfr.pNV12devPtr, inputFormat);
+            
+            
+            
             if (nvStatus != NV_ENC_SUCCESS)
                 return nvStatus;
 
@@ -567,7 +604,7 @@ NVENCSTATUS CNvEncoder::AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInpu
             // Allocate Input, Reference surface
             for (uint32_t j = 0; j < 2; j++)
             {
-                nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, &m_stMVBuffer[j][i].stInputBfr[j].hInputSurface, inputFormat);
+                nvStatus = m_pNvHWEncoder->NvEncCreateInputBuffer(uInputWidth, uInputHeight, (void**)&m_stMVBuffer[j][i].stInputBfr[j].pNV12devPtr, inputFormat);
                 if (nvStatus != NV_ENC_SUCCESS)
                     return nvStatus;
                 m_stMVBuffer[j][i].stInputBfr[j].bufferFmt = inputFormat;
@@ -605,8 +642,10 @@ NVENCSTATUS CNvEncoder::ReleaseIOBuffers()
     {
         for (uint32_t i = 0; i < m_uEncodeBufferCount; i++)
         {
-            m_pNvHWEncoder->NvEncDestroyInputBuffer(m_stEncodeBuffer[j][i].stInputBfr.hInputSurface);
-            m_stEncodeBuffer[j][i].stInputBfr.hInputSurface = NULL;
+            m_pNvHWEncoder->NvEncUnmapInputResource((void*)m_stEncodeBuffer[j][i].stInputBfr.nvRegisteredResource);
+            m_pNvHWEncoder->NvEncUnregisterResource((void*)m_stEncodeBuffer[j][i].stInputBfr.hInputSurface);
+            //m_pNvHWEncoder->NvEncDestroyInputBuffer((void*)m_stEncodeBuffer[j][i].stInputBfr.pNV12devPtr);
+            m_stEncodeBuffer[j][i].stInputBfr.pNV12devPtr = NULL;
             m_pNvHWEncoder->NvEncDestroyBitstreamBuffer(m_stEncodeBuffer[j][i].stOutputBfr.hBitstreamBuffer);
             m_stEncodeBuffer[j][i].stOutputBfr.hBitstreamBuffer = NULL;
             if (m_stEncoderInput.enableAsyncMode)
@@ -638,8 +677,8 @@ NVENCSTATUS CNvEncoder::ReleaseMVIOBuffers()
         {
             for (uint32_t j = 0; j < 2; j++)
             {
-                m_pNvHWEncoder->NvEncDestroyInputBuffer(m_stMVBuffer[k][i].stInputBfr[j].hInputSurface);
-                m_stMVBuffer[k][i].stInputBfr[j].hInputSurface = NULL;
+                m_pNvHWEncoder->NvEncDestroyInputBuffer((void*)m_stMVBuffer[k][i].stInputBfr[j].pNV12devPtr);
+                m_stMVBuffer[k][i].stInputBfr[j].pNV12devPtr = NULL;
             }
             m_pNvHWEncoder->NvEncDestroyMVBuffer(m_stMVBuffer[k][i].stOutputBfr.hBitstreamBuffer);
             m_stMVBuffer[k][i].stOutputBfr.hBitstreamBuffer = NULL;
@@ -1186,37 +1225,41 @@ NVENCSTATUS CNvEncoder::EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush
         pEncodeBuffer = m_EncodeBufferQueue[cam_idx].GetAvailable();
     }
 
-    unsigned char *pInputSurface;
+    CUDA_MEMCPY2D memcpy;
+    cuMemcpy(pEncodeBuffer->stInputBfr.pNV12devPtr, (CUdeviceptr)pEncodeFrame->yuv[0], width * height + width * height / 4);
+    //pEncodeBuffer->stInputBfr.pNV12devPtr = (CUdeviceptr)pEncodeFrame->yuv[0];
+    //pEncodeBuffer->stInputBfr.hInputSurface
     
-    nvStatus = m_pNvHWEncoder->NvEncLockInputBuffer(pEncodeBuffer->stInputBfr.hInputSurface, (void**)&pInputSurface, &lockedPitch);
-    if (nvStatus != NV_ENC_SUCCESS)
-        return nvStatus;
-
-    if (pEncodeBuffer->stInputBfr.bufferFmt == NV_ENC_BUFFER_FORMAT_NV12_PL)
-    {
-        unsigned char *pInputSurfaceCh = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight*lockedPitch);
-        convertYUVpitchtoNV12(pEncodeFrame->yuv[0], pEncodeFrame->yuv[1], pEncodeFrame->yuv[2], pInputSurface, pInputSurfaceCh, width, height, width, lockedPitch);
-    }
-    else if (pEncodeBuffer->stInputBfr.bufferFmt == NV_ENC_BUFFER_FORMAT_YUV444)
-    {
-        unsigned char *pInputSurfaceCb = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
-        unsigned char *pInputSurfaceCr = pInputSurfaceCb + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
-        convertYUVpitchtoYUV444(pEncodeFrame->yuv[0], pEncodeFrame->yuv[1], pEncodeFrame->yuv[2], pInputSurface, pInputSurfaceCb, pInputSurfaceCr, width, height, width, lockedPitch);
-    }
-    else if (pEncodeBuffer->stInputBfr.bufferFmt == NV_ENC_BUFFER_FORMAT_YUV420_10BIT)
-    {
-        unsigned char *pInputSurfaceCh = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight*lockedPitch);
-        convertYUV10pitchtoP010PL((uint16_t *)pEncodeFrame->yuv[0], (uint16_t *)pEncodeFrame->yuv[1], (uint16_t *)pEncodeFrame->yuv[2], (uint16_t *)pInputSurface, (uint16_t *)pInputSurfaceCh, width, height, width, lockedPitch);
-    }
-    else
-    {
-        unsigned char *pInputSurfaceCb = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
-        unsigned char *pInputSurfaceCr = pInputSurfaceCb + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
-        convertYUV10pitchtoYUV444((uint16_t *)pEncodeFrame->yuv[0], (uint16_t *)pEncodeFrame->yuv[1], (uint16_t *)pEncodeFrame->yuv[2], (uint16_t *)pInputSurface, (uint16_t *)pInputSurfaceCb, (uint16_t *)pInputSurfaceCr, width, height, width, lockedPitch);
-    }
-    nvStatus = m_pNvHWEncoder->NvEncUnlockInputBuffer(pEncodeBuffer->stInputBfr.hInputSurface);
-    if (nvStatus != NV_ENC_SUCCESS)
-        return nvStatus;
+    //unsigned char *pInputSurface;
+    //nvStatus = m_pNvHWEncoder->NvEncLockInputBuffer(pEncodeBuffer->stInputBfr.pNV12devPtr, (void**)&pInputSurface, &lockedPitch);
+    //if (nvStatus != NV_ENC_SUCCESS)
+    //    return nvStatus;
+    
+    //if (pEncodeBuffer->stInputBfr.bufferFmt == NV_ENC_BUFFER_FORMAT_NV12_PL)
+    //{
+    //    unsigned char *pInputSurfaceCh = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight*lockedPitch);
+    //    convertYUVpitchtoNV12(pEncodeFrame->yuv[0], pEncodeFrame->yuv[1], pEncodeFrame->yuv[2], pInputSurface, pInputSurfaceCh, width, height, width, lockedPitch);
+    //}
+    //else if (pEncodeBuffer->stInputBfr.bufferFmt == NV_ENC_BUFFER_FORMAT_YUV444)
+    //{
+    //    unsigned char *pInputSurfaceCb = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
+    //    unsigned char *pInputSurfaceCr = pInputSurfaceCb + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
+    //    convertYUVpitchtoYUV444(pEncodeFrame->yuv[0], pEncodeFrame->yuv[1], pEncodeFrame->yuv[2], pInputSurface, pInputSurfaceCb, pInputSurfaceCr, width, height, width, lockedPitch);
+    //}
+    //else if (pEncodeBuffer->stInputBfr.bufferFmt == NV_ENC_BUFFER_FORMAT_YUV420_10BIT)
+    //{
+    //    unsigned char *pInputSurfaceCh = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight*lockedPitch);
+    //    convertYUV10pitchtoP010PL((uint16_t *)pEncodeFrame->yuv[0], (uint16_t *)pEncodeFrame->yuv[1], (uint16_t *)pEncodeFrame->yuv[2], (uint16_t *)pInputSurface, (uint16_t *)pInputSurfaceCh, width, height, width, lockedPitch);
+    //}
+    //else
+    //{
+    //    unsigned char *pInputSurfaceCb = pInputSurface + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
+    //    unsigned char *pInputSurfaceCr = pInputSurfaceCb + (pEncodeBuffer->stInputBfr.dwHeight * lockedPitch);
+    //    convertYUV10pitchtoYUV444((uint16_t *)pEncodeFrame->yuv[0], (uint16_t *)pEncodeFrame->yuv[1], (uint16_t *)pEncodeFrame->yuv[2], (uint16_t *)pInputSurface, (uint16_t *)pInputSurfaceCb, (uint16_t *)pInputSurfaceCr, width, height, width, lockedPitch);
+    //}
+    //nvStatus = m_pNvHWEncoder->NvEncUnlockInputBuffer(pEncodeBuffer->stInputBfr.hInputSurface);
+    //if (nvStatus != NV_ENC_SUCCESS)
+    //    return nvStatus;
     NvEncPictureCommand command;
     memset(&command, 0, sizeof(command));
     command.bForceIDR = true;
