@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
 project(nvencoder)
 
-#set(CMAKE_CXX_STANDARD 11)
-#set(CMAKE_CXX_STANDARD_REQUIRED 1)
-
 find_package(CUDA REQUIRED)
+find_package(ffmpeg REQUIRED)
 
 set(PUBLIC_HEADERS 
     include/NvEncoder/nvFileIO.h
@@ -12,20 +10,44 @@ set(PUBLIC_HEADERS
     include/NvEncoder/nvUtils.h
     include/NvEncoder/nvEncodeAPI.h
     include/NvEncoder/NvEncoder.h
-    include/NvEncoder/NvHWEncoder.h)
+    include/NvEncoder/NvHWEncoder.h
+    include/NvEncoder/FFmpegDemuxer.h
+    include/NvEncoder/nvcuvid.h
+    include/NvEncoder/NvDecoder.h
+    include/NvEncoder/NvCodecUtils.h
+    include/NvEncoder/cuviddec.h
+
+)
 
 set(SRCS
     NvHWEncoder.cpp
     NvEncoder.cpp
-)    
-add_library(${PROJECT_NAME} ${PUBLIC_HEADERS} ${SRCS})
+    img_convert.cu
+    img_convert.h
+)
+
+set(SRCS_DECODE
+    nv_decode/cuviddec.cpp
+    nv_decode/NvDecoder.cpp
+)
+
+
+
+cuda_add_library(${PROJECT_NAME} ${PUBLIC_HEADERS} ${SRCS} ${SRCS_DECODE})
 add_library(::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+source_group(decode FILES ${SRCS_DECODE})
 target_include_directories(${PROJECT_NAME} 
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
         ${CUDA_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${CUDA_LIBRARIES} ${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib)
+target_link_libraries(${PROJECT_NAME} 
+    ${CUDA_LIBRARIES} 
+    ${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib
+    FFMPEG::avcodec 
+    FFMPEG::avformat 
+    FFMPEG::avutil 
+    FFMPEG::swscale)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES 
     CXX_STANDARD 11 

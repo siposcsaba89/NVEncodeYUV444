@@ -45,7 +45,7 @@ void convertRGB2yuv44(cv::Mat & bgr, cv::Mat & yuv444)
             float y = 0.257f * pix[2] + 0.504f * pix[1] + 0.098f * pix[0] + 16;
             float u = -0.148f * pix[2] - 0.291f * pix[1] + 0.439f * pix[0] + 128;
             float v = 0.439f * pix[2] - 0.368f * pix[1] - 0.071f * pix[0] + 128;
-            yuv444.at<cv::Vec3b>(j, i) = cv::Vec3b(min(max(y, 0), 255), min(max(u, 0), 255), min(max(v, 0), 255));
+            yuv444.at<cv::Vec3b>(j, i) = cv::Vec3b(uchar(min(max(y, 0), 255)), uchar(min(max(u, 0), 255)), uchar(min(max(v, 0), 255)));
         }
     }
 }
@@ -62,7 +62,7 @@ void convertyuv442RGB(cv::Mat & yuv444, cv::Mat &  bgr)
             float b = 1.164f *(pix[0]-16.0f) + 2.018f * (pix[1] - 128.0f);
             float g = 1.164f *(pix[0]-16.0f) - 0.391f * (pix[1] - 128.0f) - 0.813f * (pix[2] - 128.0f);
             float r = 1.164f *(pix[0]-16.0f) + 1.596f * (pix[2] - 128.0f);
-            bgr.at<cv::Vec3b>(j, i) = cv::Vec3b(min(max(b,0), 255), min(max(g, 0), 255), min(max(r, 0), 255));
+            bgr.at<cv::Vec3b>(j, i) = cv::Vec3b(uchar(min(max(b,0), 255)), uchar(min(max(g, 0), 255)), uchar(min(max(r, 0), 255)));
         }
     }
 }
@@ -75,8 +75,8 @@ int main()
 
     cv::VideoCapture cap(converted);
     cap.set(CV_CAP_PROP_CONVERT_RGB, 0);
-    int wi = cap.get(CV_CAP_PROP_FRAME_WIDTH);
-    int he = cap.get(CV_CAP_PROP_FRAME_HEIGHT);
+    int wi = (int)cap.get(CV_CAP_PROP_FRAME_WIDTH);
+    int he = (int)cap.get(CV_CAP_PROP_FRAME_HEIGHT);
 
     ifstream f_left(fp, ifstream::binary);
 

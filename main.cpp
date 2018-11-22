@@ -45,7 +45,7 @@ void convertRGB2yuv44(const cv::Mat & bgr, cv::Mat & yuv444)
             float y = 0.257f * pix[2] + 0.504f * pix[1] + 0.098f * pix[0] + 16;
             float u = -0.148f * pix[2] - 0.291f * pix[1] + 0.439f * pix[0] + 128;
             float v = 0.439f * pix[2] - 0.368f * pix[1] - 0.071f * pix[0] + 128;
-            yuv444.at<cv::Vec3b>(j, i) = cv::Vec3b(y, u, v);
+            yuv444.at<cv::Vec3b>(j, i) = cv::Vec3b(uchar(y), uchar(u), uchar(v));
         }
     }
 }
@@ -169,12 +169,15 @@ int main()
         //out_yuv.write((const char *)splitted[1].data, yuv420.rows * yuv420.cols);
         //out_yuv.write((const char *)splitted[2].data, yuv420.rows * yuv420.cols);
         clock_t t = clock();
-        encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 0, fc);
-        encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
-            g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 0, fc);
-        encoder.encodeFrame(splitted2[0].data, splitted2[1].data, splitted2[2].data, 1, fc);
-        encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
-            g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 1, fc);
+        CUdeviceptr ptr;
+        encoder.encodeFrame(ptr, NV_ENC_BAYER8, 0, fc);
+        //encoder.encodeFrame(splitted[0].data, splitted[1].data, splitted[2].data, 0, fc);
+        //encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
+        //    g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 0, fc);
+        //encoder.encodeFrame(splitted2[0].data, splitted2[1].data, splitted2[2].data, 1, fc);
+        //encoder2.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
+        //    g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, 1, fc);
+        
         //encoder3.encodeFrame(g_yuv420.data, g_yuv420.data + yuv420.rows * yuv420.cols,
         //    g_yuv420.data + yuv420.rows * yuv420.cols + yuv420.rows * yuv420.cols / 4, fc);
         cout << "Time: " << clock() - t << "\n";

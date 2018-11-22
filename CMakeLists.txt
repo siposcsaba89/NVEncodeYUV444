@@ -18,3 +18,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
 add_executable(compare compare.cpp)
 target_link_libraries(compare ${OpenCV_LIBRARIES} ::nvencoder ${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib)
 target_include_directories(compare PRIVATE ${OpenCV_INCLUDE_DIRS})
+
+add_executable(NV_Decode decode.cpp)
+target_link_libraries(NV_Decode ${OpenCV_LIBRARIES} ::nvencoder ${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib)
+target_include_directories(NV_Decode PRIVATE ${OpenCV_INCLUDE_DIRS})

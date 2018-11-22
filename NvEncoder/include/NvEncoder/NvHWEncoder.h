@@ -85,9 +85,10 @@ typedef struct _EncodeInputBuffer
 {
     unsigned int      dwWidth;
     unsigned int      dwHeight;
-#if defined (NV_WINDOWS)
-    IDirect3DSurface9 *pNV12Surface;
-#endif
+    size_t      dwPitch;
+//#if defined (NV_WINDOWS)
+//    IDirect3DSurface9 *pNV12Surface;
+//#endif
     CUdeviceptr       pNV12devPtr;
     uint32_t          uNV12Stride;
     CUdeviceptr       pNV12TempdevPtr;

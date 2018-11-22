@@ -9,9 +9,10 @@
 // is strictly prohibited.
 //
 ////////////////////////////////////////////////////////////////////////////
+#pragma once
 #include <string>
 #include <vector>
-
+#include <cuda_runtime.h>
 #if defined(NV_WINDOWS)
     #include <d3d9.h>
     #include <d3d10_1.h>
@@ -97,9 +98,16 @@ public:
     }
 };
 
+typedef enum
+{
+    NV_ENC_BAYER8 = 0,
+    NV_ENC_NV12 = 1
+} NvEncodeImageType;
+
 typedef struct _EncodeFrameConfig
 {
-    uint8_t  *yuv[3];
+    CUdeviceptr input_ptr;
+    NvEncodeImageType img_type;
     uint32_t stride[3];
     uint32_t width;
     uint32_t height;
@@ -117,6 +125,8 @@ typedef enum
     NV_ENC_DX10 = 3,
 } NvEncodeDeviceType;
 
+
+
 class CNvEncoder
 {
 public:
@@ -126,7 +136,7 @@ public:
     void init(int w, int h, const std::vector<std::string> & output_files,
         const std::string & externalHintInputFile);
 
-    bool encodeFrame(uint8_t *y, uint8_t *u, uint8_t *v, int cam_idx, int frame_idx);
+    bool encodeFrame(CUdeviceptr input_img, NvEncodeImageType img_type, int cam_idx, int frame_idx);
     EncodeConfig encodeConfig;
 
 protected:
@@ -137,7 +147,6 @@ protected:
 #if defined(NV_WINDOWS)
     //IDirect3D9  *m_pD3D;
 #endif
-
     CUcontext m_cuContext;
     EncodeConfig m_stEncoderInput;
     std::vector<std::vector<EncodeBuffer>> m_stEncodeBuffer;// [MAX_ENCODE_QUEUE];
@@ -149,19 +158,12 @@ protected:
 protected:
     NVENCSTATUS                                          Deinitialize(uint32_t devicetype);
     NVENCSTATUS EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush=false, uint32_t width=0, uint32_t height=0, int cam_idx = 0);
-    //NVENCSTATUS InitD3D9(uint32_t deviceID = 0);
-    //NVENCSTATUS InitD3D11(uint32_t deviceID = 0);
-    //NVENCSTATUS InitD3D10(uint32_t deviceID = 0);
     NVENCSTATUS InitCuda(uint32_t deviceID = 0);
     NVENCSTATUS AllocateIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cams);
-    NVENCSTATUS AllocateMVIOBuffers(uint32_t uInputWidth, uint32_t uInputHeight, NV_ENC_BUFFER_FORMAT inputFormat, int num_of_cams);
     NVENCSTATUS ReleaseIOBuffers();
-    NVENCSTATUS ReleaseMVIOBuffers();
-    unsigned char* LockInputBuffer(void * hInputSurface, uint32_t *pLockedPitch);
     NVENCSTATUS FlushEncoder(int cam_idx);
     void FlushMVOutputBuffer(int cam_idx);
-    NVENCSTATUS RunMotionEstimationOnly(MEOnlyConfig *pMEOnly, bool bFlush, int cam_idx);
-
+    
     uint32_t  chromaFormatIDC = 0;
     int8_t *qpDeltaMapArray = NULL;
     uint32_t qpDeltaMapArraySize = 0;
