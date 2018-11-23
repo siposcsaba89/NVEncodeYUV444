@@ -422,7 +422,20 @@ int NvDecoder::setReconfigParams(const Rect *pCropRect, const Dim *pResizeDim)
 
 void NvDecoder::convertNV12_Y_toBayer8(const CUdeviceptr src, CUdeviceptr dst, int32_t dst_pitch)
 {
-    nvencc::convertNV12_Y_toBayer8(src, dst, m_nWidth, m_nHeight, m_bDeviceFramePitched ? m_nDeviceFramePitch : m_nWidth);
+    nvencc::convertNV12_Y_toBayer8(src, m_bDeviceFramePitched ? int(m_nDeviceFramePitch) : int(m_nWidth), 
+        dst, m_nWidth, m_nHeight, dst_pitch);
+}
+
+void NvDecoder::convertYUV420_toRGB(const CUdeviceptr src, CUdeviceptr dst, int32_t dst_pitch)
+{
+    nvencc::convertYUV420_toRGB(src, m_bDeviceFramePitched ? m_nDeviceFramePitch : m_nWidth, 
+        dst, m_nWidth, m_nHeight, dst_pitch);
+}
+
+void NvDecoder::convertYUV420_toRGB(const CUdeviceptr src, CUsurfObject dst)
+{
+    nvencc::convertYUV420_toRGB(src, m_bDeviceFramePitched ? m_nDeviceFramePitch : m_nWidth,
+        dst, m_nWidth, m_nHeight);
 }
 
 /* Return value from HandlePictureDecode() are interpreted as:

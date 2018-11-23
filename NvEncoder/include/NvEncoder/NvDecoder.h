@@ -161,6 +161,15 @@ public:
     */
     void convertNV12_Y_toBayer8(const CUdeviceptr src, CUdeviceptr dst, int32_t dst_pitch);
 
+    /**
+    *   @brief  Convert result YUV420 format to an rgb img
+    */
+    void convertYUV420_toRGB(const CUdeviceptr src, CUdeviceptr dst, int32_t dst_pitch);
+
+    /**
+    *   @brief  Convert result YUV420 format to an rgb img
+    */
+    void convertYUV420_toRGB(const CUdeviceptr src, CUsurfObject dst);
 
 private:
     /**

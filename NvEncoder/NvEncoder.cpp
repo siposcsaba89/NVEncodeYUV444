@@ -827,7 +827,8 @@ NVENCSTATUS CNvEncoder::EncodeFrame(EncodeFrameConfig *pEncodeFrame, bool bFlush
 
     if (pEncodeFrame->img_type == NV_ENC_BAYER8)
     {
-        nvencc::convertBayer8ToNV12_Y(pEncodeFrame->input_ptr, pEncodeBuffer->stInputBfr.pNV12devPtr, width, height, (int32_t)pEncodeBuffer->stInputBfr.dwPitch);
+        nvencc::convertBayer8ToNV12_Y(pEncodeFrame->input_ptr, width,
+            pEncodeBuffer->stInputBfr.pNV12devPtr, width, height, (int32_t)pEncodeBuffer->stInputBfr.dwPitch);
     }
     else if (pEncodeFrame->img_type == NV_ENC_NV12)
     { 
